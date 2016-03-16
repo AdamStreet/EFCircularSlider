@@ -187,9 +187,16 @@ static int NormalizeValues(int *startPoint, int *endPoint, int *oldAngle, int *n
     NSAssert(currentValue <= self.maximumValue && currentValue >= self.minimumValue,
              @"currentValue (%.2f) must be between self.minimuValue (%.2f) and self.maximumValue (%.2f)",
               currentValue, self.minimumValue, self.maximumValue);
-    
-    // Update the angleFromNorth to match this newly set value
-    self.angleFromNorth = (currentValue * 360)/(self.maximumValue - self.minimumValue);
+	
+	// Update the angleFromNorth to match this newly set value
+	int startPoint = self.startPoint;
+	int endPoint = self.endPoint;
+	int actualAngle = self.angleFromNorth;
+	NormalizeValues(&startPoint, &endPoint, NULL, &actualAngle);
+	
+	int normalizedAngle = (((currentValue - self.minimumValue) / (self.maximumValue - self.minimumValue)) * endPoint);
+	self.angleFromNorth = ((self.startPoint + normalizedAngle) % 360);
+	
     [self sendActionsForControlEvents:UIControlEventValueChanged];
 }
 
