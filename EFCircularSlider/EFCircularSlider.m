@@ -524,13 +524,13 @@ static const CGFloat kFitFrameRadius = -1.0;
         float minDist = 360;
         NSUInteger labelsCount = self.innerMarkingLabels.count;
         
-        for (int i = 0; i < labelsCount; i++)
+        for (NSUInteger i = 0; i < labelsCount; i++)
         {
             CGFloat percentageAlongCircle = i/(float)labelsCount;
             CGFloat degreesForLabel       = percentageAlongCircle * 360;
-            if(abs(self.angleFromNorth - degreesForLabel) < minDist)
+            if(fabs(self.angleFromNorth - degreesForLabel) < minDist)
             {
-                minDist = abs(self.angleFromNorth - degreesForLabel);
+                minDist = fabs(self.angleFromNorth - degreesForLabel);
                 bestGuessPoint = [self pointOnCircleAtAngleFromNorth:degreesForLabel];
             }
         }
