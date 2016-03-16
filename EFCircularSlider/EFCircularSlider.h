@@ -101,4 +101,9 @@ typedef enum : NSUInteger {
  */
 @property (nonatomic) CircularSliderHandleType handleType;
 
+/**
+ @brief If this value if YES, the user can't slide over the maximum value or below the start point.
+ */
+@property (nonatomic) BOOL preventOverslidingOnStartPoint;
+
 @end

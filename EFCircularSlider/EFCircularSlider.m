@@ -542,9 +542,20 @@ static const CGFloat kFitFrameRadius = -1.0;
 
 -(void)moveHandle:(CGPoint)point
 {
-    self.angleFromNorth = floor([EFCircularTrig angleRelativeToNorthFromPoint:self.centerPoint
-                                                                        toPoint:point]);;
-    [self setNeedsDisplay];
+	int newAngle = floor([EFCircularTrig angleRelativeToNorthFromPoint:self.centerPoint
+															   toPoint:point]);
+	
+	if (self.preventOverslidingOnStartPoint) {
+		const BOOL isJumping = (((180 < newAngle) && (self.angleFromNorth < 180)) ||
+								((newAngle < 180) && (180 < self.angleFromNorth)));
+		
+		if (isJumping)
+			return;
+	}
+	
+	self.angleFromNorth = newAngle;
+	
+	[self setNeedsDisplay];
 }
 
 #pragma mark - Helper functions
