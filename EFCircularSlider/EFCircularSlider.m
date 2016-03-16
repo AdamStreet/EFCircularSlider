@@ -26,15 +26,19 @@
 @property (nonatomic, readonly) CGFloat radiusForDoubleCircleInnerCircle;
 @property (nonatomic, readonly) CGFloat lineWidthForDoubleCircleInnerCircle;
 
+@property (nonatomic) BOOL snapToLabels;	// Remove if necessary
+
 @end
 
 static const CGFloat kFitFrameRadius = -1.0;
+static int NormalizeValues(int *startPoint, int *endPoint, int *oldAngle, int *newAngle);
 
 @implementation EFCircularSlider
 
 @synthesize radius = _radius;
 
 #pragma mark - Initialisation
+
 - (id)init
 {
     return [self initWithRadius:kFitFrameRadius];
@@ -72,8 +76,10 @@ static const CGFloat kFitFrameRadius = -1.0;
     _handleType    = CircularSliderHandleTypeSemiTransparentWhiteCircle;
     _labelColor    = [UIColor redColor];
     _labelDisplacement = 0;
-    
-    _angleFromNorth = 0;
+	
+	_startPoint = 0;
+	_endPoint = 360;
+    _angleFromNorth = _startPoint;
     
     self.backgroundColor = [UIColor clearColor];
 }
@@ -131,6 +137,14 @@ static const CGFloat kFitFrameRadius = -1.0;
     [self setNeedsDisplay]; // Need to redraw with new label texts
 }
 
+- (void)setExternMarkingLabels:(NSArray *)externMarkingLabels
+{
+	_externMarkingLabels = externMarkingLabels;
+	
+	[self setNeedsUpdateConstraints]; // This could affect intrinsic content size
+	[self setNeedsDisplay]; // Need to redraw with new label texts
+}
+
 -(void)setMinimumValue:(float)minimumValue
 {
     _minimumValue = minimumValue;
@@ -141,6 +155,26 @@ static const CGFloat kFitFrameRadius = -1.0;
 {
     _maximumValue = maximumValue;
     [self setNeedsDisplay]; // Need to redraw with updated value range
+}
+
+- (void)setStartPoint:(int)startPoint
+{
+	startPoint = (startPoint % 360);
+	
+	_startPoint = startPoint;
+	
+	_angleFromNorth = startPoint;
+	
+	[self setNeedsDisplay];
+}
+
+- (void)setEndPoint:(int)endPoint
+{
+	endPoint = (endPoint % 360);
+	
+	_endPoint = endPoint;
+	
+	[self setNeedsDisplay];
 }
 
 /**
@@ -181,7 +215,13 @@ static const CGFloat kFitFrameRadius = -1.0;
  */
 -(float) currentValue
 {
-    return (self.minimumValue + ((self.angleFromNorth / 360.0f) * (self.maximumValue - self.minimumValue)));
+	int normalizedStartPoint = self.startPoint;
+	int normalizedEndPoint = self.endPoint;
+	int normalizedAngle = self.angleFromNorth;
+	
+	NormalizeValues(&normalizedStartPoint, &normalizedEndPoint, NULL, &normalizedAngle);
+	
+    return (self.minimumValue + (((CGFloat)normalizedAngle / (CGFloat)normalizedEndPoint) * (self.maximumValue - self.minimumValue)));
 }
 
 -(CGFloat) radius
@@ -309,6 +349,7 @@ static const CGFloat kFitFrameRadius = -1.0;
     
     // Add the labels
     [self drawInnerLabels:ctx];
+	[self drawOuterLabels:ctx];
 }
 
 
@@ -351,10 +392,12 @@ static const CGFloat kFitFrameRadius = -1.0;
 {
     // Draw an unfilled circle (this shows what can be filled)
     [self.unfilledColor set];
-    [EFCircularTrig drawUnfilledCircleInContext:ctx
-                               center:self.centerPoint
-                               radius:self.radius
-                            lineWidth:self.lineWidth];
+    [EFCircularTrig drawUnfilledArcInContext:ctx
+									  center:self.centerPoint
+									  radius:self.radius
+								   lineWidth:self.lineWidth
+						  fromAngleFromNorth:self.startPoint
+							toAngleFromNorth:self.endPoint];
 
     // Draw an unfilled arc up to the currently filled point
     [self.filledColor set];
@@ -363,7 +406,7 @@ static const CGFloat kFitFrameRadius = -1.0;
                                       center:self.centerPoint
                                       radius:self.radius
                                    lineWidth:self.lineWidth
-                          fromAngleFromNorth:0
+                          fromAngleFromNorth:self.startPoint
                             toAngleFromNorth:self.angleFromNorth];
 }
 
@@ -447,59 +490,84 @@ static const CGFloat kFitFrameRadius = -1.0;
     CGContextRestoreGState(ctx);
 }
 
--(void) drawInnerLabels:(CGContextRef)ctx
+- (void)drawLabels:(NSArray *)labels intoContext:(CGContextRef)ctx withinCircle:(BOOL)inside
 {
-    // Only draw labels if they have been set
-    NSInteger labelsCount = self.innerMarkingLabels.count;
-    if(labelsCount)
-    {
+	// Only draw labels if they have been set
+	const NSInteger labelsCount = labels.count;
+	if (0 < labelsCount) {
 #if __IPHONE_OS_VERSION_MIN_REQUIRED >= __IPHONE_7_0
-        NSDictionary *attributes = @{ NSFontAttributeName: self.labelFont,
-                                      NSForegroundColorAttributeName: self.labelColor};
+		NSDictionary *attributes = @{ NSFontAttributeName: self.labelFont,
+									  NSForegroundColorAttributeName: self.labelColor};
 #endif
-        for (int i = 0; i < labelsCount; i++)
-        {
-            // Enumerate through labels clockwise
-            NSString* label = self.innerMarkingLabels[i];
-            
-            CGRect labelFrame = [self contextCoordinatesForLabelAtIndex:i];
-            
+		int normalizedStartPoint = self.startPoint;
+		int normalizedEndPoint = self.endPoint;
+		
+		NormalizeValues(&normalizedStartPoint, &normalizedEndPoint, NULL, NULL);
+		
+		const int totalCircleWayLenght = normalizedEndPoint;
+		
+		for (int i = 0; i < labelsCount; i++) {
+			// Enumerate through labels clockwise
+			NSString* label = labels[i];
+			
+			// Determine how many degrees around the full circle this label should go
+			const CGFloat percentage = ((CGFloat)i / ((CGFloat)labelsCount - 1));
+			const int degressFromNorth = (int)(floorf(percentage * totalCircleWayLenght));
+			const int degressFromStartPoint = ((self.startPoint + degressFromNorth) % 360);
+			CGRect labelFrame = [self contextCoordinatesForLabelAtDegreesFromNorth:degressFromStartPoint
+																			 label:label
+																	  withinCircle:inside];
+			
 #if __IPHONE_OS_VERSION_MIN_REQUIRED >= __IPHONE_7_0
-            [label drawInRect:labelFrame withAttributes:attributes];
+			[label drawInRect:labelFrame withAttributes:attributes];
 #else
-            [self.labelColor setFill];
-            [label drawInRect:labelFrame withFont:self.labelFont];
+			[self.labelColor setFill];
+			[label drawInRect:labelFrame withFont:self.labelFont];
 #endif
-        }
-    }
+		}
+	}
 }
 
--(CGRect)contextCoordinatesForLabelAtIndex:(NSInteger)index
-{
-    NSString *label = self.innerMarkingLabels[index];
 
+-(void) drawInnerLabels:(CGContextRef)ctx
+{
+	[self drawLabels:self.innerMarkingLabels intoContext:ctx withinCircle:YES];
+}
+
+- (void)drawOuterLabels:(CGContextRef)ctx
+{
+	[self drawLabels:self.externMarkingLabels intoContext:ctx withinCircle:NO];
+}
+
+-(CGRect)contextCoordinatesForLabelAtDegreesFromNorth:(int)degreesFromNorthForLabel
+												label:(NSString *)label
+										 withinCircle:(BOOL)withinCircle
+{
     // Determine how many degrees around the full circle this label should go
-    CGFloat percentageAlongCircle    = (index + 1) / (float)self.innerMarkingLabels.count;
-    CGFloat degreesFromNorthForLabel = percentageAlongCircle * 360;
-    CGPoint pointOnCircle = [self pointOnCircleAtAngleFromNorth:degreesFromNorthForLabel];
+    const CGPoint pointOnCircle = [self pointOnCircleAtAngleFromNorth:degreesFromNorthForLabel];
     
-    CGSize  labelSize        = [self sizeOfString:label withFont:self.labelFont];
-    CGPoint offsetFromCircle = [self offsetFromCircleForLabelAtIndex:index withSize:labelSize];
+    const CGSize  labelSize        = [self sizeOfString:label withFont:self.labelFont];
+    const CGPoint offsetFromCircle = [self offsetFromCircleForLabelAtDegreesFromNorth:degreesFromNorthForLabel
+																			 withSize:labelSize
+																		 withinCircle:withinCircle];
 
     return CGRectMake(pointOnCircle.x + offsetFromCircle.x, pointOnCircle.y + offsetFromCircle.y, labelSize.width, labelSize.height);
 }
 
--(CGPoint) offsetFromCircleForLabelAtIndex:(NSInteger)index withSize:(CGSize)labelSize
+-(CGPoint) offsetFromCircleForLabelAtDegreesFromNorth:(int)degreesFromNorthForLabel
+											 withSize:(CGSize)labelSize
+										 withinCircle:(BOOL)withinCircle
 {
-    // Determine how many degrees around the full circle this label should go
-    CGFloat percentageAlongCircle    = (index + 1) / (float)self.innerMarkingLabels.count;
-    CGFloat degreesFromNorthForLabel = percentageAlongCircle * 360;
-    
-    CGFloat radialDistance = self.innerLabelRadialDistanceFromCircumference + self.labelDisplacement;
-    CGPoint inwardOffset   = [EFCircularTrig pointOnRadius:radialDistance
-                                            atAngleFromNorth:degreesFromNorthForLabel];
-    
-    return CGPointMake(-labelSize.width * 0.5 + inwardOffset.x, -labelSize.height * 0.5 + inwardOffset.y);
+    // TODO replace innerLabelRadialDistanceFromCircumference
+    const CGFloat radialDistance = self.innerLabelRadialDistanceFromCircumference + self.labelDisplacement;
+    CGPoint offset   = [EFCircularTrig pointOnRadius:radialDistance
+									atAngleFromNorth:degreesFromNorthForLabel];
+	
+	if (!withinCircle) {
+		offset.x *= -1.0;
+	}
+	
+    return CGPointMake(-labelSize.width * 0.5 + offset.x, -labelSize.height * 0.5 + offset.y);
 }
 
 #pragma mark - UIControl functions
@@ -542,18 +610,37 @@ static const CGFloat kFitFrameRadius = -1.0;
 
 -(void)moveHandle:(CGPoint)point
 {
-	int newAngle = floor([EFCircularTrig angleRelativeToNorthFromPoint:self.centerPoint
+	int newAngleFromNorth = floor([EFCircularTrig angleRelativeToNorthFromPoint:self.centerPoint
 															   toPoint:point]);
 	
-	if (self.preventOverslidingOnStartPoint) {
-		const BOOL isJumping = (((180 < newAngle) && (self.angleFromNorth < 180)) ||
-								((newAngle < 180) && (180 < self.angleFromNorth)));
+	if (0 < self.startPoint ||
+		self.endPoint < 360) {
+		// endpoint or startpoint is set
+		// Normalize values to have startPoint = 0
 		
+		int normalizedEndPoint = self.endPoint;
+		int normalizedStartPoint = self.startPoint;
+		int normalizedNewAngle = newAngleFromNorth;
+		int normalizedOldAngle = self.angleFromNorth;
+		
+		NormalizeValues(&normalizedStartPoint, &normalizedEndPoint, &normalizedOldAngle, &normalizedNewAngle);
+		
+		if (normalizedNewAngle < normalizedStartPoint) {
+			newAngleFromNorth = self.startPoint;
+		}
+		
+		if (normalizedEndPoint < normalizedNewAngle) {
+			newAngleFromNorth = self.endPoint;
+		}
+		
+		// Avoid to jump from the beginning to the end or vica vesa
+		
+		const BOOL isJumping = (abs(normalizedStartPoint - normalizedEndPoint)/2) < abs(normalizedOldAngle - normalizedNewAngle);
 		if (isJumping)
 			return;
 	}
 	
-	self.angleFromNorth = newAngle;
+	self.angleFromNorth = newAngleFromNorth;
 	
 	[self setNeedsDisplay];
 }
@@ -577,3 +664,29 @@ static const CGFloat kFitFrameRadius = -1.0;
 }
 
 @end
+
+static inline int NormalizeValues(int *startPoint, int *endPoint, int *oldAngle, int *newAngle)
+{
+	NSCParameterAssert(startPoint);
+	NSCParameterAssert(endPoint);
+	
+	if (*startPoint <= *endPoint)
+		return 0;
+	
+	const int diff = (360 - *startPoint);
+	
+	*startPoint = ((*startPoint + diff) % 360);
+	*endPoint = ((*endPoint + diff) % 360);
+	
+	if (newAngle) {
+		*newAngle = ((*newAngle + diff) % 360);
+	}
+	
+	if (oldAngle) {
+		*oldAngle = ((*oldAngle + diff) % 360);
+	}
+	
+	NSCAssert(*startPoint == 0, @"Review calculations");
+	
+	return diff;
+}

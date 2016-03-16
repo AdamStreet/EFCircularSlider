@@ -53,17 +53,25 @@ typedef enum : NSUInteger {
 /**
  *  @property BOOL indicating whether values snap to nearest label
  */
-@property (nonatomic) BOOL snapToLabels;
-/**
- *  Note: The LAST label will appear at North/midnight
- *        The FIRST label will appear at the first interval after North/midnight
- *
- *  @property NSArray of strings used to render labels at regular intervals within the circle
- */
+//@property (nonatomic) BOOL snapToLabels;
+
 @property (nonatomic, strong) NSArray *innerMarkingLabels;
 
+@property (nonatomic, strong) NSArray *externMarkingLabels;
 
 #pragma mark - Visual Customisation
+
+/**
+ @brief Start point in degree (0-359) when the circle
+ is started to draw.
+ */
+@property (nonatomic) int startPoint;
+/**
+ @brief End point in degree (0-359) when the circle
+ is finished to draw.
+ */
+@property (nonatomic) int endPoint;
+
 /**
  *  @property Width of the line to draw for slider
  */
@@ -100,10 +108,5 @@ typedef enum : NSUInteger {
  *  @property Type of the handle to display to represent draggable current value
  */
 @property (nonatomic) CircularSliderHandleType handleType;
-
-/**
- @brief If this value if YES, the user can't slide over the maximum value or below the start point.
- */
-@property (nonatomic) BOOL preventOverslidingOnStartPoint;
 
 @end
