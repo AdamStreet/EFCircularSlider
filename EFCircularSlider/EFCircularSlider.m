@@ -181,7 +181,7 @@ static const CGFloat kFitFrameRadius = -1.0;
  */
 -(float) currentValue
 {
-    return (self.angleFromNorth * (self.maximumValue - self.minimumValue))/360.0f;
+    return (self.minimumValue + ((self.angleFromNorth / 360.0f) * (self.maximumValue - self.minimumValue)));
 }
 
 -(CGFloat) radius
