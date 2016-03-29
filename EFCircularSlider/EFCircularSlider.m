@@ -198,6 +198,8 @@ static int NormalizeValues(int *startPoint, int *endPoint, int *oldAngle, int *n
 	self.angleFromNorth = ((self.startPoint + normalizedAngle) % 360);
 	
     [self sendActionsForControlEvents:UIControlEventValueChanged];
+	
+	[self setNeedsDisplay];
 }
 
 -(void)setAngleFromNorth:(int)angleFromNorth
